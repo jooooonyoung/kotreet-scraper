@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: kotreet-scraper
+    env: docker
+    plan: free
+    healthCheckPath: /
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
