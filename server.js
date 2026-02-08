@@ -46,68 +46,6 @@ Response format (JSON only, no markdown):
 
 app.get('/', (req, res) => { res.json({ status: 'ok', message: 'Kotreet Scraper API v3' }); });
 
-// 네이버
-app.post('/api/scrape/naver', async (req, res) => {
-  const { shopName } = req.body;
-  if (!shopName) return res.status(400).json({ error: 'shopName required' });
-  let browser;
-  try {
-    browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
-    const page = await browser.newPage();
-    await page.setViewportSize({ width: 430, height: 932 });
-    await page.goto(`https://m.search.naver.com/search.naver?query=${encodeURIComponent(shopName + ' 리뷰')}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    await page.waitForTimeout(2000);
-
-    // 네이버 플레이스 리뷰 영역 찾기
-    const placeLink = await page.$('a[href*="place.naver.com"]');
-    if (placeLink) {
-      const href = await placeLink.getAttribute('href');
-      if (href) {
-        // 플레이스 ID 추출 후 리뷰 페이지로 직접 이동
-        const match = href.match(/place\.naver\.com\/[^/]+\/(\d+)/);
-        if (match) {
-          await page.goto(`https://m.place.naver.com/restaurant/${match[1]}/review/visitor`, { waitUntil: 'domcontentloaded', timeout: 30000 });
-          await page.waitForTimeout(3000);
-          // 더보기 몇번 클릭
-          for (let i = 0; i < 3; i++) {
-            const more = await page.$('a[class*="more"], button[class*="more"]');
-            if (more) { await more.click(); await page.waitForTimeout(1500); }
-          }
-        }
-      }
-    }
-
-    // 리뷰 텍스트 수집 (다양한 셀렉터)
-    const reviews = await page.$$eval(
-      '.pui__vn15t2 span, .pui__xtsQN-, .YeINN, [class*="txt_comment"], [class*="review_content"], .zPfVt',
-      els => els.slice(0, 50).map(e => e.textContent?.trim()).filter(t => t && t.length > 10)
-    );
-
-    await browser.close();
-    res.json({ success: true, reviews: [...new Set(reviews)].slice(0, 30), source: 'naver' });
-  } catch (e) { if (browser) await browser.close(); res.json({ success: false, reviews: [], error: e.message, source: 'naver' }); }
-});
-
-// 카카오
-app.post('/api/scrape/kakao', async (req, res) => {
-  const { shopName } = req.body;
-  if (!shopName) return res.status(400).json({ error: 'shopName required' });
-  let browser;
-  try {
-    browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
-    const page = await browser.newPage();
-    await page.goto(`https://m.map.kakao.com/actions/searchView?q=${encodeURIComponent(shopName)}`, { waitUntil: 'networkidle', timeout: 30000 });
-    await page.waitForTimeout(2000);
-    const first = await page.$('.search_item, .item_place');
-    if (first) { await first.click(); await page.waitForTimeout(2000); }
-    const tab = await page.$('text=후기');
-    if (tab) { await tab.click(); await page.waitForTimeout(2000); }
-    const reviews = await page.$$eval('.txt_comment, .review_contents, .comment_info', el => el.slice(0, 30).map(e => e.textContent?.trim()).filter(t => t && t.length > 10));
-    await browser.close();
-    res.json({ success: true, reviews: reviews.slice(0, 30), source: 'kakao' });
-  } catch (e) { if (browser) await browser.close(); res.json({ success: false, reviews: [], error: e.message, source: 'kakao' }); }
-});
-
 // 구글
 app.post('/api/scrape/google', async (req, res) => {
   const { shopName } = req.body;
@@ -145,46 +83,6 @@ app.post('/api/scrape/google', async (req, res) => {
     await browser.close();
     res.json({ success: true, reviews: [...new Set(reviews)].slice(0, 30), source: 'google' });
   } catch (e) { if (browser) await browser.close(); res.json({ success: false, reviews: [], error: e.message, source: 'google' }); }
-});
-
-// 캐치테이블
-app.post('/api/scrape/catchTable', async (req, res) => {
-  const { shopName } = req.body;
-  if (!shopName) return res.status(400).json({ error: 'shopName required' });
-  let browser;
-  try {
-    browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
-    const page = await browser.newPage();
-    await page.goto(`https://app.catchtable.co.kr/ct/search/result?keyword=${encodeURIComponent(shopName)}`, { waitUntil: 'networkidle', timeout: 30000 });
-    await page.waitForTimeout(2000);
-    const first = await page.$('.search-item, [class*="SearchResultItem"], a[href*="/shop/"]');
-    if (first) { await first.click(); await page.waitForTimeout(2000); }
-    const tab = await page.$('text=리뷰');
-    if (tab) { await tab.click(); await page.waitForTimeout(2000); }
-    const reviews = await page.$$eval('[class*="review"], [class*="Review"], .review-content', el => el.slice(0, 30).map(e => e.textContent?.trim()).filter(t => t && t.length > 10));
-    await browser.close();
-    res.json({ success: true, reviews: reviews.slice(0, 30), source: 'catchTable' });
-  } catch (e) { if (browser) await browser.close(); res.json({ success: false, reviews: [], error: e.message, source: 'catchTable' }); }
-});
-
-// 다이닝코드
-app.post('/api/scrape/diningcode', async (req, res) => {
-  const { shopName } = req.body;
-  if (!shopName) return res.status(400).json({ error: 'shopName required' });
-  let browser;
-  try {
-    browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
-    const page = await browser.newPage();
-    await page.goto(`https://www.diningcode.com/list.dc?query=${encodeURIComponent(shopName)}`, { waitUntil: 'networkidle', timeout: 30000 });
-    await page.waitForTimeout(2000);
-    const first = await page.$('.dc-restaurant, .PoiBlock, a[href*="/profile.dc"]');
-    if (first) { await first.click(); await page.waitForTimeout(2000); }
-    const tab = await page.$('text=리뷰');
-    if (tab) { await tab.click(); await page.waitForTimeout(2000); }
-    const reviews = await page.$$eval('.ReviewText, .review-content, .comment', el => el.slice(0, 30).map(e => e.textContent?.trim()).filter(t => t && t.length > 10));
-    await browser.close();
-    res.json({ success: true, reviews: reviews.slice(0, 30), source: 'diningcode' });
-  } catch (e) { if (browser) await browser.close(); res.json({ success: false, reviews: [], error: e.message, source: 'diningcode' }); }
 });
 
 // AI 분석 (bestReviews 포함)
