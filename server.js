@@ -89,7 +89,7 @@ app.post('/api/analyze-manual', async (req, res) => {
   if (!reviewText || !category || !indicators || indicators.length === 0) return res.status(400).json({ error: 'reviewText, category, indicators required' });
   try {
     const cleaned = removeStopwords(reviewText);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
     const result = await model.generateContent([getCategoryPrompt(category, indicators), `\n\nReviews:\n${cleaned.slice(0, 8000)}`]);
     const text = result.response.text();
     const match = text.match(/\{[\s\S]*\}/);
@@ -104,7 +104,7 @@ app.post('/api/reanalyze', async (req, res) => {
   const { reviewText, category, indicators, previousAnalysis, feedback } = req.body;
   if (!reviewText || !feedback) return res.status(400).json({ error: 'reviewText and feedback required' });
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
     const prompt = `${getCategoryPrompt(category, indicators)}\n\nPrevious analysis:\n${JSON.stringify(previousAnalysis)}\n\nFeedback:\n${feedback}\n\nRe-analyze considering the feedback.`;
     const cleaned = removeStopwords(reviewText);
     const result = await model.generateContent([prompt, `\n\nReviews:\n${cleaned.slice(0, 8000)}`]);
@@ -121,7 +121,7 @@ app.post('/api/generate-description', async (req, res) => {
   const { shopName, category, reviewText } = req.body;
   if (!shopName) return res.status(400).json({ error: 'shopName required' });
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
     const categoryKo = { restaurant: '음식점', cafe: '카페', beauty: '뷰티/에스테틱' }[category] || category;
     const prompt = `You are a Korean travel guide writer for foreign tourists visiting Korea.
 
