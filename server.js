@@ -32,6 +32,8 @@ Also provide:
 - A confidence score (1-10) for your analysis
 - A one-line summary in English targeting foreign tourists (max 100 chars)
 - A one-line summary in Korean (max 50 chars)
+- A shop description in Korean (descriptionKo) for foreign tourists, including: a brief intro paragraph about what makes this place special, key features as bullet points (3-5 items), and a short overview section with location area, price range ($-$$$), style, and supported languages. Keep it concise and informative. Max 500 chars.
+- The same description translated to English (descriptionEn). Max 500 chars.
 - Pick the top 10 most positive/praising reviews from the input. For each, extract:
   - userId: mask the ID like "abc***" (first 3 chars + ***)
   - date: the date if available, otherwise "N/A"
@@ -39,7 +41,7 @@ Also provide:
   - content: the full review text (max 150 chars)
 
 Response format (JSON only, no markdown):
-{"scores": [score1, score2, ...], "confidence": number, "summaryEn": "string", "summaryKo": "string", "bestReviews": [{"userId": "abc***", "date": "2024.12.01", "rating": 5, "content": "..."}]}`;
+{"scores": [score1, score2, ...], "confidence": number, "summaryEn": "string", "summaryKo": "string", "descriptionKo": "string", "descriptionEn": "string", "bestReviews": [{"userId": "abc***", "date": "2024.12.01", "rating": 5, "content": "..."}]}`;
 };
 
 app.get('/', (req, res) => { res.json({ status: 'ok', message: 'Kotreet Scraper API v3' }); });
@@ -197,7 +199,7 @@ app.post('/api/analyze-manual', async (req, res) => {
     const match = text.match(/\{[\s\S]*\}/);
     if (!match) throw new Error('Invalid AI response');
     const analysis = JSON.parse(match[0]);
-    res.json({ success: true, analysis: { scores: analysis.scores, confidence: analysis.confidence, summaryEn: analysis.summaryEn, summaryKo: analysis.summaryKo, bestReviews: analysis.bestReviews || [], indicators } });
+    res.json({ success: true, analysis: { scores: analysis.scores, confidence: analysis.confidence, summaryEn: analysis.summaryEn, summaryKo: analysis.summaryKo, descriptionKo: analysis.descriptionKo || '', descriptionEn: analysis.descriptionEn || '', bestReviews: analysis.bestReviews || [], indicators } });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -214,7 +216,31 @@ app.post('/api/reanalyze', async (req, res) => {
     const match = text.match(/\{[\s\S]*\}/);
     if (!match) throw new Error('Invalid AI response');
     const analysis = JSON.parse(match[0]);
-    res.json({ success: true, analysis: { scores: analysis.scores, confidence: analysis.confidence, summaryEn: analysis.summaryEn, summaryKo: analysis.summaryKo, bestReviews: analysis.bestReviews || [], indicators } });
+    res.json({ success: true, analysis: { scores: analysis.scores, confidence: analysis.confidence, summaryEn: analysis.summaryEn, summaryKo: analysis.summaryKo, descriptionKo: analysis.descriptionKo || '', descriptionEn: analysis.descriptionEn || '', bestReviews: analysis.bestReviews || [], indicators } });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// 9개국어 번역
+app.post('/api/translate', async (req, res) => {
+  const { summaryKo, descriptionKo, languages } = req.body;
+  if (!summaryKo || !languages) return res.status(400).json({ error: 'summaryKo and languages required' });
+  try {
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const langNames = { en: 'English', ja: 'Japanese', zh: 'Chinese (Simplified)', vi: 'Vietnamese', th: 'Thai', id: 'Indonesian', es: 'Spanish', fr: 'French' };
+    const prompt = `Translate the following Korean text to these languages: ${languages.map(l => langNames[l] || l).join(', ')}.
+
+Summary (Korean): ${summaryKo}
+
+Description (Korean): ${descriptionKo || ''}
+
+Response format (JSON only, no markdown):
+{${languages.map(l => `"${l}": {"summary": "translated summary", "description": "translated description"}`).join(', ')}}`;
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('Invalid response');
+    const translations = JSON.parse(match[0]);
+    res.json({ success: true, translations });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
