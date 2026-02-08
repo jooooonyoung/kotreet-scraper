@@ -116,6 +116,38 @@ app.post('/api/reanalyze', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
+// AI 소개글 생성 (구글 검색 기반)
+app.post('/api/generate-description', async (req, res) => {
+  const { shopName, category, reviewText } = req.body;
+  if (!shopName) return res.status(400).json({ error: 'shopName required' });
+  try {
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const categoryKo = { restaurant: '음식점', cafe: '카페', beauty: '뷰티/에스테틱' }[category] || category;
+    const prompt = `You are a Korean travel guide writer for foreign tourists visiting Korea.
+
+Search your knowledge about "${shopName}" (category: ${categoryKo}) and write a detailed Korean description for foreign tourists.
+
+Write in Korean. Follow this exact format:
+
+1. Opening paragraph (2-3 sentences): What makes this place special, its reputation, why foreign visitors love it.
+2. Second paragraph (2-3 sentences): The experience/atmosphere, value for money, who it's best for.
+3. 주요 특징: (3-5 bullet points of key services/menu items/specialties)
+4. 개요:
+   * 주요 위치: (area/neighborhood)
+   * 가격대: ($, $$, or $$$)
+   * 스타일: (brief style description)
+   * 지원 가능 언어: (Korean + any other languages if known)
+
+${reviewText ? `\nReference reviews for context:\n${reviewText.slice(0, 3000)}` : ''}
+
+Write ONLY the description text in Korean, no JSON, no markdown code blocks. Max 600 chars.`;
+
+    const result = await model.generateContent(prompt);
+    const text = result.response.text().trim();
+    res.json({ success: true, descriptionKo: text });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
 // 9개국어 번역
 app.post('/api/translate', async (req, res) => {
   const { summaryKo, descriptionKo, languages } = req.body;
